@@ -3,6 +3,7 @@
 
 // This #include statement was automatically added by the Particle IDE.
 #include "IOT-ECOSYS_LSM9DS1_Acc_Gyr_Mag.h"
+#include "IoT-Eco-NeoPIXEL-Ring.h"
 
 /*
 *  This file is a sample application, based
@@ -72,6 +73,8 @@ uint avgMagMaxAvg[] = {0,0,0};
 
 uint differenz[] = {0,0,0};
 
+short highestDifferenz = -1;
+
 
 uint avgMag[] = {0,0,0};
 
@@ -85,7 +88,7 @@ uint loopsToPublish = (uint) (publishDelay / delayTime);
 uint avgFactor = 50;
 
 
-unsigned long nMeasure = 0;
+unsigned long rpm = 0;
 
 
 uint mag[3];
@@ -108,12 +111,14 @@ uint calibrationCycles = 0;
 unsigned long lastZeroCheck = 0;
 
 
-
+IoTEcoSys_NeoPIXEL_Ring ring(16);
 
 void setup() {
 
   lsm.init();
-  Particle.variable("nMeasure", nMeasure);
+  ring.init();
+
+  Particle.variable("rpm", rpm);
   Serial.begin(9600);
   pinMode(button, INPUT);
 }
@@ -125,11 +130,12 @@ void loop() {
   // Nine degrees of freedom sensor LSMD9S1 read sensors
   lsm.read();
 
+
   mag[0] = lsm.getMagRaw_X();
   mag[1] = lsm.getMagRaw_Y();
   mag[2] = lsm.getMagRaw_Z();
 
-  nMeasure++;
+
 
   /*Calibration*/
 
@@ -171,6 +177,14 @@ void loop() {
 
       differenz[i] = avgMagMaxAvg[i] - avgMagMinAvg[i];
 
+    }
+
+    if(differenz[0] >= differenz[1] && differenz[0] >= differenz[2]){
+      highestDifferenz = 0;
+    }else if(differenz[1] >= differenz[0] && differenz[1] >= differenz[2]){
+      highestDifferenz = 1;
+    }else if(differenz[2] >= differenz[0] && differenz[2] >= differenz[1]){
+      highestDifferenz = 2;
     }
     //Substract One Cycle
     calibrationCycles--;
@@ -253,6 +267,10 @@ void changeStatus(short status, short direction){
 
 }
 
+void setRpmVariable(){
+    rpm = rotationPerMinute[highestDifferenz];
+}
+
 
 void setRotationToZero(){
   unsigned long now = millis();
@@ -263,8 +281,9 @@ void setRotationToZero(){
   for(int i=0; i < 3; i++){
       if((now - lastRotation[i]) / 1000.0 > 15){
         rotationPerMinute[i] = 0.0;
+        setRpmVariable();
         Serial.printlnf("zero %d rpm: %.2f now: %lu lastRotation: %lu", i, rotationPerMinute[i], now , lastRotation[i]);
-    }
+      }
   }
   lastZeroCheck = now;
 }
@@ -281,6 +300,7 @@ void calculateRotationPerMinute(short direction){
 
 
     rotationPerMinute[direction] = (2 * rotationPerMinute[direction] + (60.0 * 1000.0 / (float) (now - lastRotation[direction]))) / 3;
+    setRpmVariable()
     Serial.printlnf("rotated %d rpm: %.2f now: %lu lastRotation: %lu", direction, rotationPerMinute[direction], now , lastRotation[direction]);
 
 
