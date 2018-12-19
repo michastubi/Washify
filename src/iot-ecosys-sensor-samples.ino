@@ -105,6 +105,8 @@ int button = D4;
 
 uint calibrationCycles = 0;
 
+unsigned long lastZeroCheck = 0;
+
 
 
 
@@ -228,7 +230,7 @@ void loop() {
     last[i] = mag[i];
   }
 
-
+  setRotationToZero();
   delay(delayTime);
 }
 
@@ -242,15 +244,29 @@ void changeStatus(short status, short direction){
   }*/
 
   if(rotationStatus[direction] + 1 == status){
-    Serial.printlnf("Status D: %d: S: %d", direction, status);
     rotationStatus[direction] = status;
   }
   else if(rotationStatus[direction] == 3 && status == 0){
-    Serial.printlnf("Status D: %d: S: %d", direction, status);
     rotationStatus[direction] = status;
     calculateRotationPerMinute(direction);
   }
 
+}
+
+
+void setRotationToZero(){
+  unsigned long now = millis();
+  if(now - lastZeroCheck < 5000){
+    return;
+  }
+
+  for(int i=0; i < 3; i++){
+      if((now - lastRotation[i]) / 1000.0 > 15){
+        rotationPerMinute[i] = 0.0;
+        Serial.printlnf("zero %d rpm: %.2f now: %lu lastRotation: %lu", i, rotationPerMinute[i], now , lastRotation[i]);
+    }
+  }
+  lastZeroCheck = now;
 }
 
 
@@ -263,10 +279,11 @@ void calculateRotationPerMinute(short direction){
     }
 
 
-    if((now - lastRotation[direction]) / 1000.0 < 10){
+
     rotationPerMinute[direction] = (2 * rotationPerMinute[direction] + (60.0 * 1000.0 / (float) (now - lastRotation[direction]))) / 3;
     Serial.printlnf("rotated %d rpm: %.2f now: %lu lastRotation: %lu", direction, rotationPerMinute[direction], now , lastRotation[direction]);
-    }
+
+
 
     lastRotation[direction] = now;
 
