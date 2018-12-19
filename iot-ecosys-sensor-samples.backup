@@ -70,8 +70,6 @@ IoTEcoSys_LSM9DS1_Acc_Gyr_Mag lsm(true);
 uint avgMagMinAvg[] = {0,0,0};
 uint avgMagMaxAvg[] = {0,0,0};
 
-uint differenz[] = {0,0,0};
-
 
 uint avgMag[] = {0,0,0};
 
@@ -98,9 +96,6 @@ uint lowestValue[3];
 //Init: -1, going up: 0, is in maxima: 1, going down: 2, is in minima: 3.
 short rotationStatus[] = {-1,-1,-1};
 
-float rotationPerMinute[] = {0.0,0.0,0.0};
-unsigned long lastRotation[] = {0,0,0};
-
 int button = D4;
 
 uint calibrationCycles = 0;
@@ -123,95 +118,66 @@ void loop() {
   // Nine degrees of freedom sensor LSMD9S1 read sensors
   lsm.read();
 
+
+
   mag[0] = lsm.getMagRaw_X();
   mag[1] = lsm.getMagRaw_Y();
   mag[2] = lsm.getMagRaw_Z();
 
   nMeasure++;
 
-  /*Calibration*/
-
   if(digitalRead(button) == HIGH){
-    Serial.printlnf("Button");
-    calibrationCycles = CALIBRATION_DURATION;
+      Serial.printlnf("Button");
+      calibrationCycles = CALIBRATION_DURATION;
   }
 
 
-  if(calibrationCycles){
-    if(calibrationCycles % 1000 == 0){
-      Serial.printlnf("calibrationCycles: %d", calibrationCycles);
-    }
-    if(calibrationCycles == CALIBRATION_DURATION){
-      resetCalibration();
-    }
-
-    calculateAvg();
-
-    for(int i=0; i<3; i++){
-      //Wechsel nach oben
-      if(last[i] <= avgMag[i] && mag[i] > avgMag[i]){
-        calculateMinAvg(i);
-        highestValue[i] = mag[i];
-      }
-      //Wechsel nach unten
-      if(last[i] >= avgMag[i] && mag[i] < avgMag[i]){
-        calculateMaxAvg(i);
-        lowestValue[i] = mag[i];
-      }
-
-      if (highestValue[i] < mag[i]){
-        highestValue[i] = mag[i];
-      }
-      if (lowestValue[i] > mag[i]){
-        lowestValue[i] = mag[i];
-      }
-
-
-      differenz[i] = avgMagMaxAvg[i] - avgMagMinAvg[i];
-
-    }
-    //Substract One Cycle
-    calibrationCycles--;
-
-  }
-  /*Calibration End*/
-  else{
-
-  /*Rotation Recognition */
+  calculateAvg();
 
   for(int i=0; i<3; i++){
     //Wechsel nach oben
     if(last[i] <= avgMag[i] && mag[i] > avgMag[i]){
       status[i] = 1;
+      calculateMinAvg(i);
+      highestValue[i] = mag[i];
+      //Serial.printlnf("UP %d Last: %d Now: %d", i, last[i], mag[i]);
       changeStatus(0,i);
     }
     //Wechsel nach unten
     if(last[i] >= avgMag[i] && mag[i] < avgMag[i]){
       status[i] = -1;
+      calculateMaxAvg(i);
+      lowestValue[i] = mag[i];
+      //Serial.printlnf("DOWN %d Last: %d Now: %d", i, last[i], mag[i]);
       changeStatus(2,i);
     }
 
-    if (mag[i] + differenz[i] * 0.3 > avgMagMaxAvg[i]){
+    if (highestValue[i] < mag[i]){
+      highestValue[i] = mag[i];
+    }
+    if (lowestValue[i] > mag[i]){
+      lowestValue[i] = mag[i];
+    }
+
+    if (mag[i]*1.01 > avgMagMaxAvg[i] && mag[i]*0.99 < avgMagMaxAvg[i]){
       changeStatus(1,i);
     }
-    if (mag[i] - differenz[i] * 0.3  < avgMagMinAvg[i]){
+    if (mag[i]*1.01 > avgMagMinAvg[i] && mag[i]*0.99 < avgMagMinAvg[i]){
       changeStatus(3,i);
     }
 
   }
 
-  /*Rotation Recognition End*/
-}
 
 
 
-  /* Publish */
+
 
   if(loopsToPublish <= 0){
     loopsToPublish = (uint) (publishDelay / delayTime);
 
 
-    Serial.printlnf("avg x: %d, min: %d, max: %d, dif: %d\navg y: %d, min: %d, max: %d dif: %d\navg z: %d, min: %d, max: %d dif: %d\n", avgMag[0], avgMagMinAvg[0], avgMagMaxAvg[0], differenz[0], avgMag[1], avgMagMinAvg[1], avgMagMaxAvg[1], differenz[1], avgMag[2], avgMagMinAvg[2], avgMagMaxAvg[2], differenz[2]);
+    Serial.printlnf("avg x: %d, min: %d, max: %d\navg y: %d, min: %d, max: %d\navg z: %d, min: %d, max: %d\n", avgMag[0], avgMagMinAvg[0], avgMagMaxAvg[0],  avgMag[1], avgMagMinAvg[1], avgMagMaxAvg[1], avgMag[2], avgMagMinAvg[2], avgMagMaxAvg[2]);
 
     //Particle.publish(String("mag_sensor"), String(mag[0]) +":"+ String(mag[1]) +":"+ String(mag[2]));
     //Particle.publish(String("avg"), String(avgMag[0]) + ":" + String(avgMag[1]) + ":" + String(avgMag[2]));
@@ -223,56 +189,42 @@ void loop() {
     loopsToPublish--;
   }
 
-  /* Publish End*/
   for(int i=0; i<3; i++){
     last[i] = mag[i];
   }
+  calibrationCycles--;
 
 
   delay(delayTime);
 }
 
 void changeStatus(short status, short direction){
-  /*if((rotationStatus[direction] == 0 || rotationStatus[direction] == -1) && status == 2){
+  if((rotationStatus[direction] == 0 || rotationStatus[direction] == -1) && status == 2){
     rotationStatus[direction] = status;
   }
   if(rotationStatus[direction] == 2 && status == 0){
     rotationStatus[direction] = status;
-    calculateRotationPerMinute(direction);
-  }*/
+    rotated(direction);
+  }
 
-  if(rotationStatus[direction] + 1 == status){
-    Serial.printlnf("Status D: %d: S: %d", direction, status);
-    rotationStatus[direction] = status;
-  }
-  else if(rotationStatus[direction] == 3 && status == 0){
-    Serial.printlnf("Status D: %d: S: %d", direction, status);
-    rotationStatus[direction] = status;
-    calculateRotationPerMinute(direction);
-  }
+  /*if(rotationStatus[direction] + 1 == status){
+  Serial.printlnf("Status D: %d: S: %d", direction, status);
+  rotationStatus[direction] = status;
+}
+else if(rotationStatus[direction] == 3 && status == 0){
+Serial.printlnf("Status D: %d: S: %d", direction, status);
+rotationStatus[direction] = status;
+rotated(direction);
+}*/
 
 }
 
-
-
-void calculateRotationPerMinute(short direction){
-
-    unsigned long now = millis();
-    if(lastRotation[direction] > now){
-      lastRotation[direction] = 0.0;
-    }
-
-
-    if((now - lastRotation[direction]) / 1000.0 < 10){
-    rotationPerMinute[direction] = (2 * rotationPerMinute[direction] + (60.0 * 1000.0 / (float) (now - lastRotation[direction]))) / 3;
-    Serial.printlnf("rotated %d rpm: %.2f now: %lu lastRotation: %lu", direction, rotationPerMinute[direction], now , lastRotation[direction]);
-    }
-
-    lastRotation[direction] = now;
-
+void rotated(short direction){
+  Serial.printlnf("rotated %d", direction);
 }
 
 void calculateAvg(){
+
 
   if(avgMag[0] == 0){
     for(int i=0; i < 3; i++){
@@ -285,7 +237,7 @@ void calculateAvg(){
         avgMag[i] = (avgMag[i] * avgFactor + mag[i] * 1) / (avgFactor + 1);
       }
       else{
-        avgMag[i] = (avgMagMaxAvg[i] + avgMagMinAvg[i]) / 2;
+          avgMag[i] = (avgMagMaxAvg[i] + avgMagMinAvg[i]) / 2;
       }
     }
   }
@@ -299,6 +251,7 @@ void calculateMaxAvg(int i){
   else{
     avgMagMaxAvg[i] = (avgMagMaxAvg[i] * avgFactor + highestValue[i] * 1) / (avgFactor + 1);
   }
+  //Serial.printlnf("maxAvg %d: %d", i, avgMagMaxAvg[i]);
 }
 
 void calculateMinAvg(int i){
@@ -309,12 +262,5 @@ void calculateMinAvg(int i){
   else{
     avgMagMinAvg[i] = (avgMagMinAvg[i] * avgFactor + lowestValue[i] * 1) / (avgFactor + 1);
   }
-}
-
-void resetCalibration(){
-  for(int i=0; i<3; i++){
-    avgMagMinAvg[i] = 0;
-    avgMag[i] = 0;
-    avgMagMaxAvg[i] = 0;
-  }
+  //Serial.printlnf("minAvg %d: %d", i, avgMagMinAvg[i]);
 }
