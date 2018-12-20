@@ -103,6 +103,8 @@ short rotationStatus[] = {-1,-1,-1};
 
 float rotationPerMinute[] = {0.0,0.0,0.0};
 unsigned long lastRotation[] = {0,0,0};
+unsigned long lastRotationMain = 0;
+bool finished = false;
 
 int button = D4;
 
@@ -142,16 +144,20 @@ void loop() {
   if(digitalRead(button) == HIGH){
     Serial.printlnf("Button");
     calibrationCycles = CALIBRATION_DURATION;
-  }
+    ring.neoRingFillClockWise(0, 50, "white");
 
+  }
+ring.neoRingFillPercentage((float) calibrationCycles  / (float) CALIBRATION_DURATION, "white");
 
   if(calibrationCycles){
-    if(calibrationCycles % 1000 == 0){
+    if(calibrationCycles % 300 == 0){
       Serial.printlnf("calibrationCycles: %d", calibrationCycles);
+
     }
     if(calibrationCycles == CALIBRATION_DURATION){
       resetCalibration();
     }
+
 
     calculateAvg();
 
@@ -244,7 +250,12 @@ void loop() {
     last[i] = mag[i];
   }
 
+  if(finished == false && !calibrationCycles){
+  ring.neoRingUsingNoDelayCounterClockWise(rpm, "blue");
   setRotationToZero();
+  }
+
+
   delay(delayTime);
 }
 
@@ -263,22 +274,36 @@ void changeStatus(short status, short direction){
   else if(rotationStatus[direction] == 3 && status == 0){
     rotationStatus[direction] = status;
     calculateRotationPerMinute(direction);
+    finished = false;
   }
 
 }
 
 void setRpmVariable(){
     rpm = rotationPerMinute[highestDifferenz];
+    lastRotationMain = lastRotation[highestDifferenz];
 }
 
 
 void setRotationToZero(){
   unsigned long now = millis();
-  if(now - lastZeroCheck < 5000){
+  if(now - lastZeroCheck < 2000){
     return;
   }
 
+  if(rpm == 0 && (lastRotationMain + 40000) < now && finished == false){
+    ring.neoRingFillClockWise(0, 300, "green");
+    finished = true;
+  }
+
+
+
   for(int i=0; i < 3; i++){
+    if((now - lastRotation[i]) / 1000.0 > 2){
+      rotationPerMinute[i] = (2 * rotationPerMinute[i]) / 3;
+      setRpmVariable();
+      Serial.printlnf("toZero %d rpm: %.2f now: %lu lastRotation: %lu", i, rotationPerMinute[i], now , lastRotation[i]);
+    }
       if((now - lastRotation[i]) / 1000.0 > 15){
         rotationPerMinute[i] = 0.0;
         setRpmVariable();
@@ -300,7 +325,7 @@ void calculateRotationPerMinute(short direction){
 
 
     rotationPerMinute[direction] = (2 * rotationPerMinute[direction] + (60.0 * 1000.0 / (float) (now - lastRotation[direction]))) / 3;
-    setRpmVariable()
+    setRpmVariable();
     Serial.printlnf("rotated %d rpm: %.2f now: %lu lastRotation: %lu", direction, rotationPerMinute[direction], now , lastRotation[direction]);
 
 

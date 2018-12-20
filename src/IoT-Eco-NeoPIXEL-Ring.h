@@ -56,6 +56,7 @@ public:
     int setGlRGB( String color);
     void neoRingClockWise(int circles, int del, String color);
     void neoRingFillClockWise(int showuptime, int del, String color);
+    void neoRingFillPercentage(float percentage, String color);
     void neoRingDoubleCounterClockWise(int circles, int del, String color);
     void neoRingUsingNoDelayCounterClockWise(float rpm, String color);
     void neoRingTrippleCounterClockWise(int circles, int del, String color);

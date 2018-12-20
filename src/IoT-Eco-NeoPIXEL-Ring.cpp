@@ -57,6 +57,8 @@ int pNoDelay[] = {0,1,2,3,4,5,6,7,8,9,10,11,0,1,2,3,4,5,6,7,8,9,10,11};
 int pStatusNoDelay = 0;
 unsigned long lastPchangeNoDelay = 0;
 
+short lastNumberOfLights = 0;
+
 // Constructor inits NeoPIXEL-Ring related to pixels (default is pin 2)
 /*!
 \param pixels amount of pixels on ring
@@ -163,9 +165,33 @@ void IoTEcoSys_NeoPIXEL_Ring::neoRingFillClockWise(int showuptime, int del, Stri
     _ring.show();
     delay(del);
   }
+  if(showuptime > 0){
   delay(showuptime);
   changeColor(_ring.Color(0, 0, 0)); // GRB
   _ring.show();
+}
+}
+
+
+
+void IoTEcoSys_NeoPIXEL_Ring::neoRingFillPercentage(float percentage, String color){
+
+
+
+  int number_lights = percentage * (float) PIXEL_COUNT;
+  if (lastNumberOfLights == number_lights){
+    return;
+  }
+
+  changeColor(_ring.Color(0, 0, 0)); // GRB
+  _ring.show();
+
+  for(int i=0; i< number_lights; i++){
+    setGlRGB(color);
+    _ring.setPixelColor(i,_ring.Color(gl_green, gl_red, gl_blue));
+  }
+  _ring.show();
+  lastNumberOfLights = number_lights;
 }
 
 // NeoPIXEL ring double counter clockwise
