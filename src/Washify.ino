@@ -106,11 +106,19 @@ unsigned long lastRotation[] = {0,0,0};
 unsigned long lastRotationMain = 0;
 int finished = false;
 
+int startedWhen = 0;
+
 int button = D4;
 
 int calibrationCycles = 0;
 
 unsigned long lastZeroCheck = 0;
+
+bool leds = true;
+
+bool isTurnedOff = false;
+
+String deviceName = "Washinator";
 
 
 IoTEcoSys_NeoPIXEL_Ring ring(16);
@@ -123,7 +131,10 @@ void setup() {
   Particle.variable("rpm", rpm);
   Particle.variable("finished", finished);
   Particle.variable("calibratevar", calibrationCycles);
+  Particle.variable("devicename", deviceName);
   Particle.function("calibrate", apiCalibrate);
+  Particle.function("setled", apiSetLed);
+  Particle.function("setname", apiSetName);
   Serial.begin(9600);
   pinMode(button, INPUT);
 }
@@ -140,18 +151,23 @@ void loop() {
   mag[1] = lsm.getMagRaw_Y();
   mag[2] = lsm.getMagRaw_Z();
 
-
+  if(!leds && !isTurnedOff){
+    ring.neoRingClockWise(1, 1, "off");
+    isTurnedOff = true;
+  }
 
   /*Calibration*/
 
   if(digitalRead(button) == HIGH){
     Serial.printlnf("Button");
     calibrationCycles = CALIBRATION_DURATION;
+      if(leds){
     ring.neoRingFillClockWise(0, 50, "white");
-
+}
   }
+  if(leds){
 ring.neoRingFillPercentage((float) calibrationCycles  / (float) CALIBRATION_DURATION, "white");
-
+}
   if(calibrationCycles){
     if(calibrationCycles % 300 == 0){
       Serial.printlnf("calibrationCycles: %d", calibrationCycles);
@@ -254,7 +270,9 @@ ring.neoRingFillPercentage((float) calibrationCycles  / (float) CALIBRATION_DURA
   }
 
   if(finished == false && !calibrationCycles){
+      if(leds){
   ring.neoRingUsingNoDelayCounterClockWise(rpm, "blue");
+}
   setRotationToZero();
   }
 
@@ -290,12 +308,15 @@ void setRpmVariable(){
 
 void setRotationToZero(){
   unsigned long now = millis();
-  if(now - lastZeroCheck < 2000){
+  if(now - lastZeroCheck < 500){
     return;
   }
 
-  if(rpm == 0 && (lastRotationMain + 60000) < now && finished == false){
+  if(rpm == 0 && (lastRotationMain + 60000) < now && finished == false && (startedWhen + 10000) < now){
+    Particle.publish("finished", "done", PRIVATE);
+      if(leds){
     ring.neoRingFillClockWise(0, 50, "green");
+  }
     finished = true;
   }
 
@@ -307,7 +328,7 @@ void setRotationToZero(){
       setRpmVariable();
       Serial.printlnf("toZero %d rpm: %.2f now: %lu lastRotation: %lu", i, rotationPerMinute[i], now , lastRotation[i]);
     }
-      if((now - lastRotation[i]) / 1000.0 > 15){
+      if((now - lastRotation[i]) / 1000.0 > 7){
         rotationPerMinute[i] = 0.0;
         setRpmVariable();
         Serial.printlnf("zero %d rpm: %.2f now: %lu lastRotation: %lu", i, rotationPerMinute[i], now , lastRotation[i]);
@@ -335,6 +356,7 @@ void calculateRotationPerMinute(short direction){
     setRpmVariable();
     if(direction == highestDifferenz){
       finished = false;
+      startedWhen = millis();
     Serial.printlnf("rotated %d rpm: %.2f now: %lu lastRotation: %lu", direction, rotationPerMinute[direction], now , lastRotation[direction]);
     }
 
@@ -395,4 +417,18 @@ int apiCalibrate(String extra) {
 
   calibrationCycles = CALIBRATION_DURATION;
   return 0;
+}
+
+int apiSetLed(String status){
+  if(status == "on"){
+    leds = true;
+  }
+  if(status == "off"){
+    leds = false;
+    isTurnedOff = false;
+  }
+}
+
+int apiSetName(String name){
+  deviceName = name;
 }
