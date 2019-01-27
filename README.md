@@ -1,10 +1,10 @@
-# TestProjekt
+# Washify
 
-A Particle project named TestProjekt
+A Particle project named Washify
 
 ## Welcome to your project!
 
-Every new Particle project is composed of 3 important elements that you'll see have been created in your project directory for TestProjekt.
+Every new Particle project is composed of 3 important elements that you'll see have been created in your project directory for Washify.
 
 #### ```/src``` folder:  
 This is the source folder that contains the firmware files for your project. It should *not* be renamed. 
